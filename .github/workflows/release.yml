@@ -22,32 +22,28 @@ jobs:
           - name: linux-x64
             os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            archive: tar.gz
             cross: true
           - name: linux-arm64
             os: ubuntu-latest
             target: aarch64-unknown-linux-musl
-            archive: tar.gz
             cross: true
           # macOS: liên kết động libSystem (static toàn phần không khả thi trên macOS),
           # nhưng không phụ thuộc thư viện bên thứ ba -> self-contained.
           - name: darwin-x64
             os: macos-14
             target: x86_64-apple-darwin
-            archive: tar.gz
             cross: false
           - name: darwin-arm64
             os: macos-14
             target: aarch64-apple-darwin
-            archive: tar.gz
             cross: false
           # Windows: MSVC + crt-static (xem .cargo/config.toml) -> không cần vcruntime.
-          # Chỉ tcp-tcp build được trên Windows; ba bản *-unix cần Unix API.
+          # Chỉ tcp-tcp build được; ba bản *-unix cần Unix domain socket (tokio không
+          # hỗ trợ trên Windows) nên bị loại khỏi matrix build của Windows.
           - name: windows-x64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             ext: ".exe"
-            archive: zip
             cross: false
             build_args: "--bin tcp-tcp"
 
@@ -89,37 +85,23 @@ jobs:
           echo "$out" | grep -Eq 'statically linked|static-pie linked'
           echo "$out" | grep -q 'dynamically linked' && { echo "::error::binary is dynamically linked"; exit 1; } || true
 
-      - name: Stage artifacts
+      - name: Rename binaries (per os-arch, không đóng gói)
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME}"
-          STAGE="tcp-proxy-${VERSION}-${{ matrix.name }}"
-          mkdir "${STAGE}"
+          mkdir dist
           for b in tcp-tcp tcp-unix unix-tcp unix-unix; do
             src="target/${{ matrix.target }}/release/${b}${{ matrix.ext }}"
-            [ -f "${src}" ] && cp "${src}" "${STAGE}/"
+            if [ -f "${src}" ]; then
+              cp "${src}" "dist/${b}-${{ matrix.name }}${{ matrix.ext }}"
+            fi
           done
-          cp README.md "${STAGE}/"
-          echo "STAGE=${STAGE}" >> "$GITHUB_ENV"
-
-      - name: Package tar.gz
-        if: matrix.archive == 'tar.gz'
-        shell: bash
-        run: |
-          tar czf "${STAGE}.tar.gz" "${STAGE}"
-          echo "ARCHIVE=${STAGE}.tar.gz" >> "$GITHUB_ENV"
-
-      - name: Package zip
-        if: matrix.archive == 'zip'
-        shell: bash
-        run: |
-          7z a "${STAGE}.zip" "${STAGE}" >/dev/null
-          echo "ARCHIVE=${STAGE}.zip" >> "$GITHUB_ENV"
+          ls -l dist
 
       - uses: actions/upload-artifact@v5
         with:
-          name: tcp-proxy-${{ matrix.name }}
-          path: ${{ env.ARCHIVE }}
+          name: binaries-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
 
   release:
     needs: build
@@ -134,7 +116,8 @@ jobs:
       - name: Create checksums
         working-directory: artifacts
         run: |
-          sha256sum tcp-proxy-* > checksums.txt
+          files="$(ls | grep -v '^checksums.txt$')"
+          sha256sum ${files} > checksums.txt
           cat checksums.txt
 
       - name: Create GitHub Release

@@ -1,0 +1,6 @@
+# Link tĩnh CRT trên Windows MSVC -> tcp-tcp.exe không cần vcruntime140.dll/msvcp140.dll.
+# Trên Linux dùng target *-musl (static mặc định). macOS tự liên kết động libSystem.
+# Việc bỏ đường dẫn build (tương đương -trimpath) do `strip = "symbols"` trong
+# [profile.release] của Cargo.toml đảm nhiệm (đã kiểm chứng binary không còn path tuyệt đối).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

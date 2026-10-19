@@ -1,10 +1,9 @@
 #![warn(rust_2018_idioms)]
 
-use tokio::io::AsyncWriteExt;
 use tokio::io::copy_bidirectional;
+use tokio::io::AsyncWriteExt;
 use tokio::net::{UnixListener, UnixStream};
 
-use futures::FutureExt;
 use std::env;
 use std::error::Error;
 use std::fs::{self, Permissions};
@@ -30,22 +29,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     while let Ok((mut inbound, _)) = listener.accept().await {
         let to_addr = server_addr.clone();
-        tokio::spawn(async move {    
+        tokio::spawn(async move {
             let mut outbound = match UnixStream::connect(to_addr).await {
                 Err(e) => {
-                    let _ = inbound.shutdown();
+                    let _ = inbound.shutdown().await;
                     eprintln!("connect: {}", e);
                     return;
                 }
-                Ok(r) => r
+                Ok(r) => r,
             };
 
-            copy_bidirectional(&mut inbound, &mut outbound).map(|r| {
-                if let Err(e) = r {
-                    eprintln!("transfer: {}", e);
-                }
-            })
-            .await
+            if let Err(e) = copy_bidirectional(&mut inbound, &mut outbound).await {
+                eprintln!("transfer: {}", e);
+            }
         });
     }
 

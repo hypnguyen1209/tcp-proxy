@@ -5,9 +5,15 @@ edition = "2021"
 autobins = false
 
 [dependencies]
-tokio = { version = "1.15",features = ["full"] }
-#tokio-stream = { version = "0.1" }
-futures = { version = "0.3", features = ["thread-pool"]}
+tokio = { version = "1.54", features = ["full"] }
+
+[profile.release]
+strip = "symbols"    # bỏ bảng ký hiệu + thông tin debug (tương đương -s -w)
+lto = true           # link-time optimization cho binary gọn/nhanh hơn
+codegen-units = 1    # tối ưu tốt nhất, binary nhỏ hơn
+panic = "abort"      # bỏ bộ unwinding -> binary nhỏ hơn
+# trim-paths: xem --remap-path-prefix trong .cargo/config.toml (trim-paths trong profile
+# vẫn cần nightly tới Cargo 1.92; dùng --remap-path-prefix để chạy trên stable)
 
 [[bin]]
 name = "tcp-tcp"

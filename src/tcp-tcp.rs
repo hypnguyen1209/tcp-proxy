@@ -1,10 +1,9 @@
 #![warn(rust_2018_idioms)]
 
-use tokio::io::AsyncWriteExt;
 use tokio::io::copy_bidirectional;
-use tokio::net::{TcpListener, TcpStream, lookup_host};
+use tokio::io::AsyncWriteExt;
+use tokio::net::{lookup_host, TcpListener, TcpStream};
 
-use futures::FutureExt;
 use std::env;
 use std::error::Error;
 
@@ -27,35 +26,32 @@ async fn main() -> Result<(), Box<dyn Error>> {
         tokio::spawn(async move {
             let addr = match lookup_host(to_addr).await {
                 Err(e) => {
-                    let _ = inbound.shutdown();
+                    let _ = inbound.shutdown().await;
                     eprintln!("lookup: {}", e);
                     return;
                 }
                 Ok(mut r) => match r.next() {
                     None => {
-                        let _ = inbound.shutdown();
+                        let _ = inbound.shutdown().await;
                         eprintln!("lookup: no addr");
                         return;
                     }
-                    Some(a) => a
-                }
+                    Some(a) => a,
+                },
             };
-    
+
             let mut outbound = match TcpStream::connect(addr).await {
                 Err(e) => {
-                    let _ = inbound.shutdown();
+                    let _ = inbound.shutdown().await;
                     eprintln!("connect: {}", e);
                     return;
                 }
-                Ok(r) => r
+                Ok(r) => r,
             };
 
-            copy_bidirectional(&mut inbound, &mut outbound).map(|r| {
-                if let Err(e) = r {
-                    eprintln!("transfer: {}", e);
-                }
-            })
-            .await
+            if let Err(e) = copy_bidirectional(&mut inbound, &mut outbound).await {
+                eprintln!("transfer: {}", e);
+            }
         });
     }
 

@@ -82,8 +82,12 @@ jobs:
         if: startsWith(matrix.name, 'linux')
         shell: bash
         run: |
-          file "target/${{ matrix.target }}/release/tcp-tcp"
-          file "target/${{ matrix.target }}/release/tcp-tcp" | grep -q 'statically linked'
+          out="$(file "target/${{ matrix.target }}/release/tcp-tcp")"
+          echo "$out"
+          # musl x86_64 mặc định sinh static-pie ("static-pie linked"); aarch64 là
+          # "statically linked". Cả hai đều tĩnh hoàn toàn (không phụ thuộc .so).
+          echo "$out" | grep -Eq 'statically linked|static-pie linked'
+          echo "$out" | grep -q 'dynamically linked' && { echo "::error::binary is dynamically linked"; exit 1; } || true
 
       - name: Stage artifacts
         shell: bash
